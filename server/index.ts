@@ -1,11 +1,13 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { createClient } from "@supabase/supabase-js";
 import router from "./routes";
+import { storageMode } from "./storage";
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.API_PORT ?? process.env.PORT ?? 3001);
 
 app.use(cors());
 app.use(express.json());
@@ -36,7 +38,7 @@ async function authMiddleware(req: express.Request, res: express.Response, next:
 
 app.use("/api", authMiddleware, router);
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.json({ ok: true, storageMode }));
 
 const server = createServer(app);
 

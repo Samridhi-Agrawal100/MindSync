@@ -1,7 +1,6 @@
 import { Router, Request, Response } from "express";
 import { storage } from "./storage";
-import { insertProjectSchema, insertTaskSchema, insertNoteSchema, insertLinkSchema } from "@shared/schema";
-import { z } from "zod";
+import { insertProjectSchema, insertTaskSchema, insertNoteSchema, insertLinkSchema } from "../shared/schema";
 
 const router = Router();
 
