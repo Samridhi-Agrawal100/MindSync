@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Trash2, Link2, ExternalLink, Filter } from "lucide-react";
-import type { Tables } from "@/integrations/supabase/types";
 
 export default function Links() {
   const { user } = useAuth();
-  const [links, setLinks] = useState<Tables<"links">[]>([]);
-  const [projects, setProjects] = useState<Tables<"projects">[]>([]);
+  const [links, setLinks] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
@@ -23,30 +22,40 @@ export default function Links() {
   const [filterProject, setFilterProject] = useState("all");
 
   const fetchData = async () => {
-    if (!user) return;
-    const [l, p] = await Promise.all([
-      supabase.from("links").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("projects").select("*").eq("user_id", user.id).order("name"),
-    ]);
-    setLinks(l.data || []);
-    setProjects(p.data || []);
+    try {
+      const [l, p] = await Promise.all([api.links.list(), api.projects.list()]);
+      setLinks(l || []);
+      setProjects((p || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  useEffect(() => { fetchData(); }, [user]);
+  useEffect(() => { if (user) fetchData(); }, [user]);
 
   const handleCreate = async () => {
-    if (!user || !url.trim() || !title.trim() || !projectId) return;
-    const { error } = await supabase.from("links").insert({ url, title, description, project_id: projectId, user_id: user.id });
-    if (error) toast.error(error.message);
-    else { toast.success("Link saved"); setOpen(false); setUrl(""); setTitle(""); setDescription(""); setProjectId(""); fetchData(); }
+    if (!url.trim() || !title.trim() || !projectId) return;
+    try {
+      await api.links.create({ url, title, description, projectId });
+      toast.success("Link saved");
+      setOpen(false); setUrl(""); setTitle(""); setDescription(""); setProjectId("");
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("links").delete().eq("id", id);
-    toast.success("Link deleted"); fetchData();
+    try {
+      await api.links.delete(id);
+      toast.success("Link deleted");
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  const filtered = filterProject === "all" ? links : links.filter((l) => l.project_id === filterProject);
+  const filtered = filterProject === "all" ? links : links.filter((l) => l.projectId === filterProject);
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
 
   return (
@@ -104,10 +113,10 @@ export default function Links() {
                     {link.title} <ExternalLink className="h-3 w-3" />
                   </a>
                   {link.description && <p className="text-xs text-muted-foreground truncate">{link.description}</p>}
-                  {projectMap[link.project_id] && (
+                  {projectMap[link.projectId] && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: projectMap[link.project_id].color }} />
-                      {projectMap[link.project_id].name}
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: projectMap[link.projectId].color }} />
+                      {projectMap[link.projectId].name}
                     </span>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,45 +8,56 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, FolderKanban } from "lucide-react";
-import type { Tables } from "@/integrations/supabase/types";
 
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
 export default function Projects() {
   const { user } = useAuth();
-  const [projects, setProjects] = useState<Tables<"projects">[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
   const fetchProjects = async () => {
-    if (!user) return;
-    const { data } = await supabase.from("projects").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    setProjects(data || []);
+    try {
+      const data = await api.projects.list();
+      setProjects(data || []);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  useEffect(() => { fetchProjects(); }, [user]);
+  useEffect(() => { if (user) fetchProjects(); }, [user]);
 
   const handleSave = async () => {
-    if (!user || !name.trim()) return;
-    if (editId) {
-      const { error } = await supabase.from("projects").update({ name, color }).eq("id", editId);
-      if (error) toast.error(error.message); else toast.success("Project updated");
-    } else {
-      const { error } = await supabase.from("projects").insert({ name, color, user_id: user.id });
-      if (error) toast.error(error.message); else toast.success("Project created");
+    if (!name.trim()) return;
+    try {
+      if (editId) {
+        await api.projects.update(editId, { name, color });
+        toast.success("Project updated");
+      } else {
+        await api.projects.create({ name, color });
+        toast.success("Project created");
+      }
+      setOpen(false); setName(""); setColor(COLORS[0]); setEditId(null);
+      fetchProjects();
+    } catch (e: any) {
+      toast.error(e.message);
     }
-    setOpen(false); setName(""); setColor(COLORS[0]); setEditId(null);
-    fetchProjects();
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("projects").delete().eq("id", id);
-    if (error) toast.error(error.message); else { toast.success("Project deleted"); fetchProjects(); }
+    try {
+      await api.projects.delete(id);
+      toast.success("Project deleted");
+      fetchProjects();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  const openEdit = (p: Tables<"projects">) => {
+  const openEdit = (p: any) => {
     setEditId(p.id); setName(p.name); setColor(p.color); setOpen(true);
   };
 

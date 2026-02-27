@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, StickyNote, Search } from "lucide-react";
 import { format } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
 
 export default function Notes() {
   const { user } = useAuth();
-  const [notes, setNotes] = useState<Tables<"notes">[]>([]);
-  const [projects, setProjects] = useState<Tables<"projects">[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -25,36 +24,45 @@ export default function Notes() {
   const [search, setSearch] = useState("");
 
   const fetchData = async () => {
-    if (!user) return;
-    const [n, p] = await Promise.all([
-      supabase.from("notes").select("*").eq("user_id", user.id).order("updated_at", { ascending: false }),
-      supabase.from("projects").select("*").eq("user_id", user.id).order("name"),
-    ]);
-    setNotes(n.data || []);
-    setProjects(p.data || []);
+    try {
+      const [n, p] = await Promise.all([api.notes.list(), api.projects.list()]);
+      setNotes(n || []);
+      setProjects((p || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  useEffect(() => { fetchData(); }, [user]);
+  useEffect(() => { if (user) fetchData(); }, [user]);
 
   const handleSave = async () => {
-    if (!user || !title.trim() || !projectId) return;
-    if (editId) {
-      const { error } = await supabase.from("notes").update({ title, content, project_id: projectId }).eq("id", editId);
-      if (error) toast.error(error.message); else toast.success("Note updated");
-    } else {
-      const { error } = await supabase.from("notes").insert({ title, content, project_id: projectId, user_id: user.id });
-      if (error) toast.error(error.message); else toast.success("Note created");
+    if (!title.trim() || !projectId) return;
+    try {
+      if (editId) {
+        await api.notes.update(editId, { title, content, projectId });
+        toast.success("Note updated");
+      } else {
+        await api.notes.create({ title, content, projectId });
+        toast.success("Note created");
+      }
+      setOpen(false); resetForm(); fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
     }
-    setOpen(false); resetForm(); fetchData();
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("notes").delete().eq("id", id);
-    toast.success("Note deleted"); fetchData();
+    try {
+      await api.notes.delete(id);
+      toast.success("Note deleted");
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  const openEdit = (n: Tables<"notes">) => {
-    setEditId(n.id); setTitle(n.title); setContent(n.content || ""); setProjectId(n.project_id); setOpen(true);
+  const openEdit = (n: any) => {
+    setEditId(n.id); setTitle(n.title); setContent(n.content || ""); setProjectId(n.projectId); setOpen(true);
   };
 
   const resetForm = () => { setEditId(null); setTitle(""); setContent(""); setProjectId(""); };
@@ -115,13 +123,13 @@ export default function Notes() {
                 </div>
                 {note.content && <p className="text-xs text-muted-foreground line-clamp-3">{note.content}</p>}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {projectMap[note.project_id] && (
+                  {projectMap[note.projectId] && (
                     <span className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: projectMap[note.project_id].color }} />
-                      {projectMap[note.project_id].name}
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: projectMap[note.projectId].color }} />
+                      {projectMap[note.projectId].name}
                     </span>
                   )}
-                  <span>{format(new Date(note.updated_at), "MMM d")}</span>
+                  <span>{format(new Date(note.updatedAt), "MMM d")}</span>
                 </div>
               </CardContent>
             </Card>

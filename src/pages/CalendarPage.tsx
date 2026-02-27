@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Circle } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay } from "date-fns";
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<Tables<"tasks">[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("tasks").select("*").eq("user_id", user.id).then(({ data }) => setTasks(data || []));
+    api.tasks.list().then((data) => setTasks(data || [])).catch(console.error);
   }, [user]);
 
   const monthStart = startOfMonth(currentMonth);
@@ -23,7 +22,7 @@ export default function CalendarPage() {
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startPad = getDay(monthStart);
 
-  const tasksForDay = (date: Date) => tasks.filter((t) => t.due_date && isSameDay(new Date(t.due_date), date));
+  const tasksForDay = (date: Date) => tasks.filter((t) => t.dueDate && isSameDay(new Date(t.dueDate), date));
   const selectedTasks = selectedDate ? tasksForDay(selectedDate) : [];
 
   return (

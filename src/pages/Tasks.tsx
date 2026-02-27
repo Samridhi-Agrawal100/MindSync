@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +11,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckSquare, Filter } from "lucide-react";
 import { format } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
 
 export default function Tasks() {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<Tables<"tasks">[]>([]);
-  const [projects, setProjects] = useState<Tables<"projects">[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -24,39 +23,50 @@ export default function Tasks() {
   const [filterProject, setFilterProject] = useState("all");
 
   const fetchData = async () => {
-    if (!user) return;
-    const [t, p] = await Promise.all([
-      supabase.from("tasks").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("projects").select("*").eq("user_id", user.id).order("name"),
-    ]);
-    setTasks(t.data || []);
-    setProjects(p.data || []);
+    try {
+      const [t, p] = await Promise.all([api.tasks.list(), api.projects.list()]);
+      setTasks(t || []);
+      setProjects((p || []).sort((a: any, b: any) => a.name.localeCompare(b.name)));
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  useEffect(() => { fetchData(); }, [user]);
+  useEffect(() => { if (user) fetchData(); }, [user]);
 
   const handleCreate = async () => {
-    if (!user || !title.trim() || !projectId) return;
-    const { error } = await supabase.from("tasks").insert({
-      title, project_id: projectId, user_id: user.id,
-      due_date: dueDate || null,
-    });
-    if (error) toast.error(error.message);
-    else { toast.success("Task created"); setOpen(false); setTitle(""); setDueDate(""); setProjectId(""); fetchData(); }
+    if (!title.trim() || !projectId) return;
+    try {
+      await api.tasks.create({ title, projectId, dueDate: dueDate || null });
+      toast.success("Task created");
+      setOpen(false); setTitle(""); setDueDate(""); setProjectId("");
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  const toggleStatus = async (task: Tables<"tasks">) => {
+  const toggleStatus = async (task: any) => {
     const newStatus = task.status === "todo" ? "completed" : "todo";
-    await supabase.from("tasks").update({ status: newStatus }).eq("id", task.id);
-    fetchData();
+    try {
+      await api.tasks.update(task.id, { status: newStatus });
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("tasks").delete().eq("id", id);
-    toast.success("Task deleted"); fetchData();
+    try {
+      await api.tasks.delete(id);
+      toast.success("Task deleted");
+      fetchData();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  const filtered = filterProject === "all" ? tasks : tasks.filter((t) => t.project_id === filterProject);
+  const filtered = filterProject === "all" ? tasks : tasks.filter((t) => t.projectId === filterProject);
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
 
   return (
@@ -111,13 +121,13 @@ export default function Tasks() {
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-medium ${task.status === "completed" ? "line-through" : ""}`}>{task.title}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {projectMap[task.project_id] && (
+                    {projectMap[task.projectId] && (
                       <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: projectMap[task.project_id].color }} />
-                        {projectMap[task.project_id].name}
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: projectMap[task.projectId].color }} />
+                        {projectMap[task.projectId].name}
                       </span>
                     )}
-                    {task.due_date && <span>{format(new Date(task.due_date), "MMM d, yyyy")}</span>}
+                    {task.dueDate && <span>{format(new Date(task.dueDate), "MMM d, yyyy")}</span>}
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive shrink-0" onClick={() => handleDelete(task.id)}>

@@ -1,40 +1,43 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckSquare, FolderKanban, StickyNote, Plus, Circle } from "lucide-react";
 import { format, isToday, addDays, isBefore, isAfter, startOfDay } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [tasks, setTasks] = useState<Tables<"tasks">[]>([]);
-  const [notes, setNotes] = useState<Tables<"notes">[]>([]);
-  const [projects, setProjects] = useState<Tables<"projects">[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [notes, setNotes] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
       const [t, n, p] = await Promise.all([
-        supabase.from("tasks").select("*").eq("user_id", user.id).eq("status", "todo").order("due_date", { ascending: true }),
-        supabase.from("notes").select("*").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(5),
-        supabase.from("projects").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+        api.tasks.list(),
+        api.notes.list(),
+        api.projects.list(),
       ]);
-      setTasks(t.data || []);
-      setNotes(n.data || []);
-      setProjects(p.data || []);
+      setTasks((t || []).filter((task: any) => task.status === "todo").sort((a: any, b: any) => {
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }));
+      setNotes((n || []).slice(0, 5));
+      setProjects(p || []);
     };
-    fetchAll();
+    fetchAll().catch(console.error);
   }, [user]);
 
   const today = startOfDay(new Date());
   const nextWeek = addDays(today, 7);
-  const todayTasks = tasks.filter((t) => t.due_date && isToday(new Date(t.due_date)));
+  const todayTasks = tasks.filter((t) => t.dueDate && isToday(new Date(t.dueDate)));
   const upcomingTasks = tasks.filter((t) => {
-    if (!t.due_date) return false;
-    const d = startOfDay(new Date(t.due_date));
+    if (!t.dueDate) return false;
+    const d = startOfDay(new Date(t.dueDate));
     return isAfter(d, today) && isBefore(d, nextWeek);
   });
 
@@ -107,7 +110,7 @@ export default function Dashboard() {
                       <Circle className="h-3 w-3 text-muted-foreground" />
                       {t.title}
                     </span>
-                    <span className="text-xs text-muted-foreground">{t.due_date && format(new Date(t.due_date), "MMM d")}</span>
+                    <span className="text-xs text-muted-foreground">{t.dueDate && format(new Date(t.dueDate), "MMM d")}</span>
                   </li>
                 ))}
               </ul>
@@ -125,7 +128,7 @@ export default function Dashboard() {
                 {notes.map((n) => (
                   <li key={n.id} className="text-sm">
                     <Link to="/notes" className="hover:text-primary transition-colors font-medium">{n.title}</Link>
-                    <p className="text-xs text-muted-foreground">{format(new Date(n.updated_at), "MMM d, yyyy")}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(n.updatedAt), "MMM d, yyyy")}</p>
                   </li>
                 ))}
               </ul>
